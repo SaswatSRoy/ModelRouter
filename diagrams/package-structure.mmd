@@ -13,11 +13,9 @@ graph TD
     Root --> AdaptersRoot[provider-adapters]
     Root --> SDKs[sdk]
 
-    CoreMod --> CorePolicy["core.policy<br/>RoutingPolicy, PolicyResolver"]
-    CoreMod --> CoreStrategy["core.strategy<br/>RoutingStrategy + built-ins"]
-    CoreMod --> CoreScoring["core.scoring<br/>ProviderScorer"]
-    CoreMod --> CoreExecution["core.execution<br/>ExecutionEngine"]
-    CoreMod --> CoreReliability["core.reliability<br/>RetryPolicy, CircuitBreaker"]
+    CoreMod --> CorePolicy["core.policy<br/>PolicyResolver, RoutingPolicy<br/>PolicyStore port"]
+    CoreMod --> CorePlanner["core.planner<br/>CandidateEnumerator<br/>ProviderScorer<br/>RoutingStrategy + built-ins"]
+    CoreMod --> CoreExecution["core.execution<br/>ExecutionEngine<br/>CircuitBreakerRegistry<br/>ResponseNormalizer<br/>RetryPolicy engine"]
 
     AdaptersRoot --> POpenAI[provider-openai]
     AdaptersRoot --> PAnthropic[provider-anthropic]
@@ -36,13 +34,19 @@ graph TD
     CoreMod -.depends on.-> SPI
     Ingress -.depends on.-> CoreMod
     POpenAI & PAnthropic & PGemini & POllama & PBaseten & PVLLM & PGroq & PFireworks & PTogether & PAzure -.implements.-> SPI
-    CacheMod -.used by.-> CoreMod
+    CacheMod -.used by.-> CoreExecution
     SecurityMod -.used by.-> Ingress
     ObsMod -.instruments.-> Ingress
     ObsMod -.instruments.-> CoreMod
-    AdminMod -.publishes config to.-> CoreMod
+    AdminMod -.publishes config to.-> CorePolicy
     DashboardMod -.calls.-> AdminMod
     SDKJava & SDKAndroid -.calls REST/gRPC.-> Ingress
 
+    CorePolicy -.policy.-> CorePlanner
+    CorePlanner -.ranked candidates.-> CoreExecution
+
     style SPI fill:#ffe,stroke:#aa0
     style CoreMod fill:#eef,stroke:#33f
+    style CorePolicy fill:#e8f5e9,stroke:#2e7d32
+    style CorePlanner fill:#e3f2fd,stroke:#1565c0
+    style CoreExecution fill:#fce4ec,stroke:#c62828

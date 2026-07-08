@@ -1,0 +1,47 @@
+%% Sequence Diagram — Inference Request with Fallback (decomposed subsystems)
+sequenceDiagram
+    autonumber
+    participant C as Client (SDK)
+    participant I as router-ingress
+    participant Sec as router-security
+    participant PE as Policy Engine
+    participant Cache as router-cache (Redis)
+    participant EP as Execution Planner
+    participant ER as Execution Runtime
+    participant P1 as provider-anthropic
+    participant P2 as provider-openai
+    participant K as Kafka
+
+    C->>I: POST /v1/inference (policy, messages)
+    I->>Sec: authenticate + authorize + rate-limit check
+    Sec-->>I: OK (tenantId resolved)
+    I->>PE: resolve policy for tenant + request overrides
+
+    PE->>PE: merge system → tenant → request policy
+    PE-->>I: effective RoutingPolicy
+
+    I->>Cache: lookup(cacheKey)
+    Cache-->>I: miss
+
+    I->>EP: plan(RoutingPolicy, providers)
+    EP->>EP: enumerate eligible candidates (capability, privacy tier)
+    EP->>Cache: fetch live provider scores
+    Cache-->>EP: scores (latency, error rate, cost, capacity)
+    EP->>EP: RoutingStrategy.rank() → [anthropic, openai]
+    EP-->>I: ranked candidate list
+
+    I->>ER: execute(rankedCandidates, request)
+    ER->>P1: invoke(request)  %% attempt 1
+    P1-->>ER: 503 Service Unavailable
+
+    Note over ER: retryable failure, pre-first-byte → advance to next candidate
+
+    ER->>P2: invoke(request)  %% attempt 2
+    P2-->>ER: 200 OK (completion)
+
+    ER->>ER: normalize response
+    ER-->>I: InferenceResponse (routing trace: anthropic failed, openai succeeded)
+    I-->>C: 200 OK
+
+    ER-)K: emit usage/cost/latency event (async, off hot path)
+    K-)Cache: async score update consumer refreshes provider scores

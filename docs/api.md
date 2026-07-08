@@ -94,7 +94,7 @@ Errors are normalized across providers into a single taxonomy so callers never n
 
 ## Versioning
 
-The API is versioned via URL path (`/v1/...`). Breaking changes ship as `/v2/...` with `/v1/...` maintained for a documented deprecation window (minimum two Phase-cycles per ROADMAP.md). This is simpler and more explicit for infra consumers than header-based versioning, at the cost of some URL churn — an accepted tradeoff for a control-plane API.
+The API is versioned via URL path (`/v1/...`). Breaking changes ship as `/v2/...` with `/v1/...` maintained for a documented deprecation window (minimum two Phase-cycles per [ROADMAP.md](../ROADMAP.md)). This is simpler and more explicit for infra consumers than header-based versioning, at the cost of some URL churn — an accepted tradeoff for a control-plane API.
 
 ## gRPC
 

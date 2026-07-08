@@ -1,8 +1,10 @@
 # ModelRouter — Architecture
 
-Status: **Draft v0.1 (pre-implementation)**
+Status: **Draft v0.2 (pre-implementation)**
 Owner: Core Architecture Group
-Related: [RFC-001.md](RFC-001.md), [ROADMAP.md](ROADMAP.md), [diagrams/](diagrams/)
+Related: [rfcs/RFC-001.md](rfcs/RFC-001.md), [ROADMAP.md](ROADMAP.md), [GLOSSARY.md](GLOSSARY.md), [diagrams/](diagrams/)
+
+> **Terminology note:** All terms used in this document are defined in [GLOSSARY.md](GLOSSARY.md). When in doubt about a term's meaning, consult the glossary — it is the authoritative source.
 
 ## 1. Architectural Style
 
@@ -39,19 +41,45 @@ See [diagrams/component-diagram.mmd](diagrams/component-diagram.mmd) for the ful
 **Never depends on:** any provider adapter directly.
 
 ### 3.2 `router-core` (the domain)
-**Responsibility:** The routing engine itself. Pure domain logic, framework-agnostic where possible.
 
-Sub-modules:
-- `policy` — `RoutingPolicy` model: rules that express intent (cost ceiling, latency SLA, privacy tier, required capabilities, preferred/excluded providers).
-- `strategy` — pluggable `RoutingStrategy` implementations (e.g., `LowestLatencyStrategy`, `CheapestViableStrategy`, `WeightedRoundRobinStrategy`, `PrivacyConstrainedStrategy`). Strategies consume policy + live provider scores and emit a ranked candidate list.
-- `scoring` — `ProviderScorer`: computes a live composite score per provider (latency EWMA, error rate, cost per token, current health, capacity headroom).
-- `execution` — orchestrates the actual call: candidate selection → adapter invocation → retry/fallback state machine → response normalization.
-- `reliability` — retry policies, circuit breakers (per-provider, per-model), fallback chain execution.
+**Responsibility:** The routing domain itself. Pure domain logic, framework-agnostic where possible. The former monolithic "routing engine" is decomposed into three distinct subsystems with clear boundaries:
 
-**Depends on:** `router-provider-spi` (the port interface), not on any concrete provider.
+#### 3.2.1 Policy Engine (`core.policy`)
+
+**Responsibility:** Resolves the effective `RoutingPolicy` for a given request. Implements the hierarchical merge: **system default → tenant default → request override**, where each layer can override or further constrain (never loosen) the layer above for security-sensitive fields like `privacyTier` and `excludedProviders`.
+
+Components:
+- `PolicyResolver` — the entry point; accepts tenant ID + per-request policy overrides, returns a fully resolved `RoutingPolicy`.
+- `RoutingPolicy` model — the canonical intent-expression object: cost ceiling, latency SLA, privacy tier, required capabilities, preferred/excluded providers, retry policy, strategy ID.
+- `PolicyStore` port — interface to the persistence layer (PostgreSQL via `router-admin`) and the hot-reload mechanism (Kafka change events).
+
+**Why a separate subsystem:** Policy resolution is a pure, deterministic computation with its own testing surface (merge semantics, constraint tightening, validation). It has no dependency on live provider state, scoring, or execution — mixing it with those concerns would obscure its contract and make policy bugs harder to isolate.
+
+#### 3.2.2 Execution Planner (`core.planner`)
+
+**Responsibility:** Given a resolved `RoutingPolicy`, produces a ranked list of `ProviderCandidate`s ready for execution. This subsystem owns the "which providers, in what order" question.
+
+Components:
+- `CandidateEnumerator` — filters the provider registry to structurally eligible candidates (capability match, not excluded, privacy-tier compatible). This is where `LOCAL_ONLY` enforcement happens — it is a structural exclusion, not a scoring signal.
+- `ProviderScorer` — attaches live composite scores to each eligible candidate (latency EWMA, error rate, cost per token, capacity headroom). Scores are read from Redis (shared across pods) with a short-TTL in-process L1 cache.
+- `RoutingStrategy` — a pluggable interface that ranks scored candidates according to the policy. Built-in strategies: `LowestLatencyStrategy`, `CheapestViableStrategy`, `WeightedRoundRobinStrategy`, `PrivacyConstrainedStrategy`. Third-party strategies implement the same interface.
+
+**Why a separate subsystem:** Planning is a stateless, side-effect-free pipeline (enumerate → score → rank) that can be tested and benchmarked independently of execution. It consumes policy (from the policy engine) and live scores (from Redis) but never touches adapters, never issues network calls to providers, and never mutates state. This separation is what makes `RoutingStrategy` a pure function — if planning and execution were interleaved, strategy implementations would be tempted to inspect execution state, breaking the pluggability contract.
+
+#### 3.2.3 Execution Runtime (`core.execution`)
+
+**Responsibility:** Takes the ranked candidate list from the execution planner and executes it: invoke the top candidate via its adapter, manage retries and fallback, enforce circuit-breaker state, and normalize the response.
+
+Components:
+- `ExecutionEngine` — the state machine that walks the candidate list. On a retryable failure (pre-first-byte), retries the current candidate with backoff up to the retry budget, then advances to the next candidate.
+- `CircuitBreakerRegistry` — per-(provider, model) circuit breakers. State: CLOSED → OPEN (on error-rate threshold) → HALF_OPEN (after cooldown) → CLOSED (on sustained success).
+- `ResponseNormalizer` — translates provider-specific response shapes into the canonical `InferenceResponse` / `InferenceChunk` stream.
+- `RetryPolicy` engine — configurable per `RoutingPolicy`: max attempts, backoff strategy, retryable failure classes.
+
+**Why a separate subsystem:** Execution is inherently stateful and side-effectful (network I/O, circuit-breaker mutations, retry state). Isolating it from planning means a bug in retry logic cannot corrupt candidate ranking, and a bug in scoring cannot cause an adapter to be invoked incorrectly. It also allows execution to be tested with fake adapters against known candidate lists, without requiring a real planner.
 
 ### 3.3 `router-provider-spi`
-**Responsibility:** The *port* — a stable interface (`InferenceProvider`) that every provider adapter must implement: `invoke()`, `invokeStreaming()`, `capabilities()`, `healthCheck()`, `estimateCost()`. This module has near-zero external dependencies and changes rarely; it is the contract that makes "add a provider without touching the core" possible.
+**Responsibility:** The *port* — a stable interface (`InferenceProvider`) that every provider adapter must implement: `invoke()`, `invokeStreaming()`, `capabilities()`, `healthCheck()`, `estimateCost()`. This module has near-zero external dependencies and changes rarely; it is the contract that makes "add a provider without touching the core" possible. See [docs/provider-contract.md](docs/provider-contract.md) for the full contract specification and versioning rules.
 
 ### 3.4 `provider-adapters/*`
 One module per provider (`provider-openai`, `provider-anthropic`, `provider-gemini`, `provider-ollama`, `provider-baseten`, `provider-vllm`, `provider-groq`, `provider-fireworks`, `provider-togetherai`, `provider-azure-openai`). Each adapter:
@@ -60,6 +88,7 @@ One module per provider (`provider-openai`, `provider-anthropic`, `provider-gemi
 - Owns its own SDK/HTTP client, auth, error-mapping, and rate-limit handling.
 - Is independently deployable/loadable (see §6, "Should providers be loaded dynamically?").
 - Is independently testable via Testcontainers/WireMock without booting the whole router.
+- Must pass the shared SPI contract test suite (see [docs/provider-contract.md](docs/provider-contract.md)).
 
 ### 3.5 `router-cache`
 **Responsibility:** Two distinct caching concerns, kept as separate components behind one facade:
@@ -86,12 +115,12 @@ Thin, idiomatic clients that speak the ModelRouter API. No routing logic lives i
 The canonical request flow (see [diagrams/sequence-diagram.mmd](diagrams/sequence-diagram.mmd) and [diagrams/routing-flow.mmd](diagrams/routing-flow.mmd)):
 
 1. Client sends an `InferenceRequest` (intent, not a provider) to `router-ingress`.
-2. `router-security` authenticates/authorizes, `router-security`/rate-limiter checks quota.
-3. `router-core.policy` resolves the applicable `RoutingPolicy` for the tenant/request.
-4. `router-core.scoring` retrieves live provider scores (from Redis-backed health/latency state).
-5. `router-core.strategy` produces a ranked list of viable `ProviderCandidate`s.
-6. `router-core.execution` invokes the top candidate via its adapter (from `provider-adapters/*`), through `router-cache` (cache check first).
-7. On failure (timeout, 5xx, rate-limit), `router-core.reliability` applies the retry/fallback policy and advances to the next candidate.
+2. `router-security` authenticates/authorizes, rate-limiter checks quota.
+3. **Policy Engine:** `core.policy.PolicyResolver` resolves the effective `RoutingPolicy` for the tenant/request.
+4. `router-cache` checks for a cache hit (short-circuits the pipeline below if hit).
+5. **Execution Planner:** `core.planner.CandidateEnumerator` filters to eligible candidates; `core.planner.ProviderScorer` retrieves live scores from Redis; `core.planner.RoutingStrategy` produces a ranked candidate list.
+6. **Execution Runtime:** `core.execution.ExecutionEngine` invokes the top candidate via its adapter (from `provider-adapters/*`).
+7. On failure (timeout, 5xx, rate-limit), `core.execution` applies the retry/fallback policy and advances to the next candidate.
 8. Response (or stream) is normalized into a provider-agnostic shape and returned to the client.
 9. Asynchronously, usage/cost/latency events are emitted to Kafka for metering, analytics, and cache/score updates — off the hot path.
 
@@ -110,11 +139,19 @@ Full topology in [diagrams/deployment-diagram.mmd](diagrams/deployment-diagram.m
 | WebFlux (reactive, non-blocking) on the ingress + core path | Inference calls are I/O-bound and long-lived (streaming); blocking threads-per-request does not scale to 1000+ concurrent requests without an enormous thread pool. See RFC-001 for the WebFlux vs. MVC debate. |
 | Stateless gateway pods | All routing state (provider scores, health, policy) lives in Redis/PostgreSQL, not in pod memory, so any pod can serve any request — horizontal scaling is trivial and rolling deploys are safe. |
 | Score computation is read-heavy and cache-local | Provider scores are read on every request but updated asynchronously (from response telemetry), so we optimize for fast local reads (Redis, with a short-TTL in-memory L1 cache) over strong consistency. |
-| Kafka off the hot path | Usage metering and cache-invalidation events are fire-and-forget from the request path; a Kafka outage degrades analytics, never request serving. |
+| Kafka off the hot path | Usage metering and cache-invalidation events are fire-and-forget from the request path; a Kafka outage degrades analytics, never request serving. See [docs/failure-modes.md](docs/failure-modes.md). |
 | Per-provider circuit breakers, not global | A single failing provider must not degrade routing to healthy providers; blast radius is contained per-provider (and per-model where relevant). |
-| Target: <30ms routing overhead | This excludes the actual provider call. It bounds policy resolution + scoring + candidate selection + cache lookup. Budget is enforced via micro-benchmarks in CI, not aspiration. |
+| Target: <30ms routing overhead | This excludes the actual provider call. It bounds policy resolution + planning + candidate selection + cache lookup. Budget is enforced via micro-benchmarks in CI, not aspiration. |
 
-## 7. Non-Goals (v1)
+## 7. Failure Modes
+
+See [docs/failure-modes.md](docs/failure-modes.md) for the complete failure mode analysis, including:
+
+- Degraded behavior for every infrastructure dependency (Redis, PostgreSQL, Kafka, OTel)
+- Invariants that hold even under degraded conditions (privacy enforcement, auth, tenant isolation)
+- Cascading failure prevention mechanisms
+
+## 8. Non-Goals (v1)
 
 To keep the design honest, explicitly out of scope for the initial architecture:
 
@@ -122,7 +159,9 @@ To keep the design honest, explicitly out of scope for the initial architecture:
 - Prompt-engineering/templating frameworks (ModelRouter routes requests; it does not author them).
 - A hosted, multi-tenant SaaS control plane (v1 is self-hostable OSS infrastructure).
 - Cross-cloud data residency guarantees beyond routing-time privacy tiering.
+- Browser-frontend SDK.
+- Multi-modal routing optimization (structurally supported, not performance-optimized).
 
-## 8. Open Questions
+## 9. Open Questions
 
-Tracked and answered in [RFC-001.md](RFC-001.md) §"Critical Design Questions". This document will be updated as those answers evolve.
+Tracked and answered in [rfcs/RFC-001.md](rfcs/RFC-001.md) §"Critical Design Questions". This document will be updated as those answers evolve.

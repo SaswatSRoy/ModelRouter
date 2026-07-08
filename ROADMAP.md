@@ -1,11 +1,15 @@
 # ModelRouter — Roadmap
 
-Status tracking for feature delivery. See [RFC-001.md](RFC-001.md) for the reasoning behind sequencing decisions.
+Status tracking for feature delivery. See [rfcs/RFC-001.md](rfcs/RFC-001.md) for the reasoning behind sequencing decisions and [GLOSSARY.md](GLOSSARY.md) for terminology.
 
 ## Phase 0 — Design (current)
 
 - [x] README, ARCHITECTURE, RFC-001 drafted
 - [x] Module boundaries and ports/adapters defined
+- [x] Routing engine decomposed into policy engine, execution planner, and execution runtime
+- [x] Provider adapter contract and versioning rules documented
+- [x] Failure modes and degraded behavior documented
+- [x] Glossary and terminology locked
 - [ ] Design review sign-off from maintainers
 - [ ] `router-provider-spi` interface frozen for v1 (`InferenceProvider` contract)
 
@@ -13,18 +17,20 @@ Status tracking for feature delivery. See [RFC-001.md](RFC-001.md) for the reaso
 
 Goal: a single team can replace hardcoded OpenAI/Anthropic calls with ModelRouter and get retries, fallback, and basic observability for free.
 
-- [ ] `router-core`: policy model, static/rule-based `RoutingStrategy` (weighted round robin, priority-order fallback)
+- [ ] `core.policy`: policy model, `PolicyResolver` with hierarchical merge (system → tenant → request)
+- [ ] `core.planner`: `CandidateEnumerator`, `ProviderScorer`, static/rule-based `RoutingStrategy` (weighted round robin, priority-order fallback)
+- [ ] `core.execution`: `ExecutionEngine` state machine, `CircuitBreakerRegistry`, `ResponseNormalizer`
 - [ ] `router-ingress`: REST API, synchronous + SSE streaming
-- [ ] `provider-openai`, `provider-anthropic` adapters
+- [ ] `provider-openai`, `provider-anthropic` adapters (passing SPI contract test suite)
 - [ ] Retry + fallback state machine (pre-first-byte only)
-- [ ] Per-provider circuit breaker
+- [ ] Per-(provider, model) circuit breaker
 - [ ] Basic API-key authentication
 - [ ] Structured logging + OpenTelemetry traces (no dashboard yet)
 - [ ] Docker Compose local dev environment
-- [ ] CI: unit tests + Testcontainers-based adapter integration tests
+- [ ] CI: unit tests + Testcontainers-based adapter integration tests + SPI contract tests
 - [ ] `sdk-java` v0 (blocking + reactive clients)
 
-**Exit criteria:** routing overhead <30ms measured in CI micro-benchmarks; a demo app running entirely through ModelRouter with induced provider failures demonstrating automatic fallback.
+**Exit criteria:** routing overhead <30ms measured in CI micro-benchmarks (decomposed: policy <2ms, planning <15ms, execution orchestration <13ms); a demo app running entirely through ModelRouter with induced provider failures demonstrating automatic fallback.
 
 ## Phase 2 — Reliability, Cost & Multi-Provider
 
@@ -76,8 +82,10 @@ Not committed, order not implied — explored as the ecosystem and adopter needs
 
 ## Non-Goals
 
-Explicitly out of scope, tracked so they don't silently creep back in:
+Explicitly out of scope, tracked so they don't silently creep back in (see also [README.md Non-Goals](README.md#non-goals)):
 
 - Model fine-tuning or training orchestration
 - Prompt templating/authoring frameworks
 - Zero-external-dependency deployment mode (Redis/Postgres/Kafka assumed) — may be revisited post-1.0
+- Browser-frontend SDK
+- Cross-cloud data residency guarantees beyond privacy-tier routing

@@ -7,11 +7,17 @@ graph TB
     end
 
     subgraph Gateway["modelrouter-gateway"]
-        Ingress[router-ingress<br/>WebFlux, REST/gRPC/SSE]
-        Security[router-security<br/>AuthN/AuthZ, rate limit]
-        Core[router-core<br/>policy · strategy · scoring · execution · reliability]
-        SPI[router-provider-spi<br/>InferenceProvider port]
-        Cache[router-cache<br/>prompt+semantic cache]
+        Ingress["router-ingress<br/>WebFlux, REST/gRPC/SSE"]
+        Security["router-security<br/>AuthN/AuthZ, rate limit"]
+
+        subgraph Core["router-core"]
+            PolicyEngine["Policy Engine<br/>PolicyResolver, RoutingPolicy"]
+            Planner["Execution Planner<br/>CandidateEnumerator · ProviderScorer · RoutingStrategy"]
+            Runtime["Execution Runtime<br/>ExecutionEngine · CircuitBreaker · ResponseNormalizer"]
+        end
+
+        SPI["router-provider-spi<br/>InferenceProvider port"]
+        Cache["router-cache<br/>prompt + semantic cache"]
 
         subgraph Adapters["provider-adapters/*"]
             OpenAI[provider-openai]
@@ -28,14 +34,14 @@ graph TB
     end
 
     subgraph Management["modelrouter-admin"]
-        Admin[router-admin<br/>CQRS command side]
+        Admin["router-admin<br/>CQRS command side"]
     end
 
     subgraph UI["modelrouter-dashboard"]
         Dashboard[router-dashboard]
     end
 
-    Obs[router-observability<br/>OTel · Prometheus · Langfuse]
+    Obs["router-observability<br/>OTel · Prometheus · Langfuse"]
 
     Redis[(Redis)]
     Postgres[(PostgreSQL)]
@@ -46,24 +52,32 @@ graph TB
     RESTClient --> Ingress
 
     Ingress --> Security
-    Security --> Core
-    Core --> Cache
-    Core --> SPI
+    Security --> PolicyEngine
+    PolicyEngine --> Planner
+    Planner --> Runtime
+    Runtime --> SPI
+    Runtime --> Cache
     SPI --> OpenAI & Anthropic & Gemini & Ollama & Baseten & VLLM & Groq & Fireworks & Together & Azure
 
     Cache --> Redis
-    Core --> Redis
+    Planner --> Redis
 
     Admin --> Postgres
     Admin -. policy change events .-> Kafka
-    Kafka -. hot reload .-> Core
-    Core -. usage events .-> Kafka
+    Kafka -. hot reload .-> PolicyEngine
+    Runtime -. usage events .-> Kafka
 
     Dashboard --> Admin
     Dashboard --> Obs
 
-    Core -. traces/metrics .-> Obs
+    Runtime -. traces/metrics .-> Obs
     Ingress -. traces/metrics .-> Obs
 
     OpenAI & Anthropic & Gemini & Groq & Fireworks & Together & Azure -->|HTTPS| ExternalCloud[External Cloud Providers]
     Ollama & VLLM & Baseten -->|local/self-hosted| LocalInference[Local / Self-Hosted Inference]
+
+    style Core fill:#eef,stroke:#33f
+    style SPI fill:#ffe,stroke:#aa0
+    style PolicyEngine fill:#e8f5e9,stroke:#2e7d32
+    style Planner fill:#e3f2fd,stroke:#1565c0
+    style Runtime fill:#fce4ec,stroke:#c62828

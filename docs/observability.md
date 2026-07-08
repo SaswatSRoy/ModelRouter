@@ -35,17 +35,17 @@ Each attempt span carries: provider ID, model ID, outcome, latency, and (if fail
 | `modelrouter_cost_usd_total` | Counter | `tenant`, `provider`, `model` |
 | `modelrouter_rate_limit_rejections_total` | Counter | `tenant` |
 
-`modelrouter_routing_overhead_ms` is the metric CI enforces the <30ms budget against (ARCHITECTURE.md §6) — it excludes provider call time by construction (measured from request-received to candidate-selected).
+`modelrouter_routing_overhead_ms` is the metric CI enforces the <30ms budget against ([ARCHITECTURE.md](../ARCHITECTURE.md) §6) — it excludes provider call time by construction (measured from request-received to candidate-selected).
 
 Reference Grafana dashboards (per-tenant cost, provider health overview, routing overhead SLO) ship as part of the Phase 2 deliverable.
 
 ## LLM-Native Tracing (Langfuse)
 
-Where a tenant opts in, a parallel export path sends prompt/completion content, token usage, and cost to Langfuse — kept deliberately separate from the OTel operational trace (which never carries prompt content by default, per [docs/security.md](security.md)). This lets teams get prompt-level debugging and eval tooling without operational traces becoming a compliance liability by default.
+Where a tenant opts in, a parallel export path sends prompt/completion content, token usage, and cost to Langfuse — kept deliberately separate from the OTel operational trace (which never carries prompt content by default, per [security.md](security.md)). This lets teams get prompt-level debugging and eval tooling without operational traces becoming a compliance liability by default.
 
 ## Logging
 
-Structured (JSON) logs, correlation-ID-linked to the OTel trace, at INFO for routing decisions (provider chosen, fallback occurred) and WARN/ERROR for failures. Request/response bodies are redacted by default (see [docs/security.md](security.md)); log volume is intentionally kept low-cardinality and cheap since it's not the primary debugging tool — traces and metrics are.
+Structured (JSON) logs, correlation-ID-linked to the OTel trace, at INFO for routing decisions (provider chosen, fallback occurred) and WARN/ERROR for failures. Request/response bodies are redacted by default (see [security.md](security.md)); log volume is intentionally kept low-cardinality and cheap since it's not the primary debugging tool — traces and metrics are.
 
 ## Alerting (reference, Phase 2+)
 
@@ -58,4 +58,4 @@ Suggested SLO-based alerts, shipped as example Prometheus alerting rules rather 
 
 ## Dashboard vs. Grafana
 
-The operator-facing `router-dashboard` (ARCHITECTURE.md §3.9) is a product surface for day-to-day operation (live decisions, policy editing, cost breakdown) and talks to `router-admin`, not to Prometheus directly — it is not a Grafana replacement, and teams are expected to use both: the dashboard for operational/policy workflows, Grafana/Langfuse for deep metrics and prompt-level analysis.
+The operator-facing `router-dashboard` ([ARCHITECTURE.md](../ARCHITECTURE.md) §3.9) is a product surface for day-to-day operation (live decisions, policy editing, cost breakdown) and talks to `router-admin`, not to Prometheus directly — it is not a Grafana replacement, and teams are expected to use both: the dashboard for operational/policy workflows, Grafana/Langfuse for deep metrics and prompt-level analysis.

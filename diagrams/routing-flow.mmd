@@ -1,0 +1,48 @@
+%% Routing Flow — ModelRouter Core Pipeline (decomposed subsystems)
+flowchart TD
+    Start([InferenceRequest received]) --> AuthCheck["router-security<br/>authenticate + authorize + rate-limit"]
+    AuthCheck --> Cache{Cache hit?}
+    Cache -- yes --> ReturnCached[Return cached response]
+    Cache -- no --> PolicyEngine
+
+    subgraph PE["Policy Engine"]
+        PolicyEngine["PolicyResolver<br/>system default → tenant default → request override"]
+    end
+
+    PolicyEngine --> Planner
+
+    subgraph EP["Execution Planner"]
+        Planner["CandidateEnumerator<br/>capability match, privacy tier, not excluded"]
+        Planner --> Eligible{Any eligible<br/>candidates?}
+        Eligible -- no --> ErrUnsat["Error: POLICY_UNSATISFIABLE"]
+        Eligible -- yes --> Score["ProviderScorer<br/>latency · error rate · cost · capacity"]
+        Score --> Strategy["RoutingStrategy.rank()<br/>e.g. cheapest-viable, lowest-latency"]
+        Strategy --> Ranked[Ranked candidate list]
+    end
+
+    Ranked --> Runtime
+
+    subgraph ER["Execution Runtime"]
+        Runtime["ExecutionEngine<br/>invoke top candidate via adapter"]
+        Runtime --> Outcome{Outcome?}
+
+        Outcome -- success --> Normalize[ResponseNormalizer]
+        Normalize --> WriteCache[Write-through cache]
+        WriteCache --> EmitEvents["Emit usage/cost events → Kafka (async)"]
+        EmitEvents --> Return([Return response to client])
+
+        Outcome -- "retryable failure<br/>pre-first-byte" --> RetryCheck{Retry budget<br/>remaining?}
+        RetryCheck -- yes --> Backoff[Apply backoff] --> Runtime
+        RetryCheck -- no --> NextCandidate{Next candidate<br/>in ranked list?}
+
+        Outcome -- non-retryable failure --> NextCandidate
+        NextCandidate -- yes --> Runtime
+        NextCandidate -- no --> ErrExhausted["Error: ALL_CANDIDATES_EXHAUSTED"]
+    end
+
+    ErrUnsat --> ReturnErr([Return error to client])
+    ErrExhausted --> ReturnErr
+
+    style PE fill:#e8f5e9,stroke:#2e7d32
+    style EP fill:#e3f2fd,stroke:#1565c0
+    style ER fill:#fce4ec,stroke:#c62828

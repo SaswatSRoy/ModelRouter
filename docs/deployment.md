@@ -14,7 +14,7 @@ Splitting the gateway from admin/dashboard means the hot request path's release 
 
 ## Container Strategy
 
-Every deployable ships as a minimal OCI image (JLink-trimmed JRE base, non-root user, distroless where feasible) built via Gradle's Docker plugin, with reproducible builds gated in CI. No deployable requires build-time secrets baked into the image; all runtime configuration is externalized (env vars / mounted config / secrets backend, per [docs/security.md](security.md)).
+Every deployable ships as a minimal OCI image (JLink-trimmed JRE base, non-root user, distroless where feasible) built via Gradle's Docker plugin, with reproducible builds gated in CI. No deployable requires build-time secrets baked into the image; all runtime configuration is externalized (env vars / mounted config / secrets backend, per [security.md](security.md)).
 
 ## Kubernetes Topology
 
@@ -43,7 +43,7 @@ A single Helm chart (`charts/modelrouter`) with subcharts/values for gateway, ad
 
 ## Scaling Behavior
 
-- **Horizontal, stateless scaling of the gateway** is the primary scaling lever (ARCHITECTURE.md §6) — no session affinity required, any pod serves any request.
+- **Horizontal, stateless scaling of the gateway** is the primary scaling lever ([ARCHITECTURE.md](../ARCHITECTURE.md) §6) — no session affinity required, any pod serves any request.
 - **HPA metrics**: CPU as a baseline, plus custom Prometheus metrics (in-flight request count, p99 routing overhead) for more accurate scale-out ahead of saturation, since inference-proxying load doesn't correlate tightly with CPU the way typical web workloads do.
 - **Redis and Kafka scale independently** per standard operational practice for those systems; ModelRouter's connection pooling and backpressure settings are tuned to degrade gracefully (queueing, then shedding via rate limiting) rather than cascading failure if either is under strain.
 

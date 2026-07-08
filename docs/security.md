@@ -16,7 +16,7 @@ Every authenticated request resolves to a `tenantId` and, optionally, a `project
 
 Tenant/project-scoped RBAC:
 
-- **Caller role** — can submit inference requests within the tenant's policy constraints; cannot exceed tenant-level cost/rate ceilings even if a request-level policy claims otherwise (policy layering is override-only-tightens for security-relevant fields, per [docs/routing.md](routing.md)).
+- **Caller role** — can submit inference requests within the tenant's policy constraints; cannot exceed tenant-level cost/rate ceilings even if a request-level policy claims otherwise (policy layering is override-only-tightens for security-relevant fields, per [routing.md](routing.md)).
 - **Operator role** — can manage `RoutingPolicy` and provider configuration for their tenant via the admin API.
 - **Admin role** — cross-tenant visibility, provider registry management, global defaults.
 
@@ -28,7 +28,7 @@ Provider API keys and other credentials are never stored in plaintext in Postgre
 
 - **`privacyTier` as a routing input, not just a label.** Requests marked `LOCAL_ONLY` are structurally ineligible for any cloud provider candidate — enforced in `CandidateEnumerator`, not left to strategy discretion, so a misconfigured or malicious strategy implementation cannot leak sensitive requests to a cloud provider.
 - **PII-aware logging redaction.** Request/response bodies are never logged verbatim by default; observability captures token counts, latency, cost, and provider/model identity, not prompt content, unless a tenant explicitly opts in (e.g., for Langfuse-based prompt debugging) with that content flagged and access-controlled separately from operational logs.
-- **No cross-tenant data mixing.** Cache keys, score aggregates used for routing decisions, and rate-limit counters are namespaced per tenant; a tenant's traffic pattern never influences another tenant's routing outcomes (see [docs/routing.md](routing.md) cache-key design).
+- **No cross-tenant data mixing.** Cache keys, score aggregates used for routing decisions, and rate-limit counters are namespaced per tenant; a tenant's traffic pattern never influences another tenant's routing outcomes (see [routing.md](routing.md) cache-key design).
 
 ## Transport Security
 
@@ -50,4 +50,4 @@ All admin-API mutations (policy changes, provider registration/deregistration, c
 | Cross-tenant data leakage via cache | Tenant-namespaced cache keys |
 | Sensitive request routed to cloud despite `LOCAL_ONLY` | Structural exclusion at `CandidateEnumerator`, not strategy-level discretion |
 | Tenant exhausting shared capacity | Per-tenant rate limiting + cost ceilings enforced independent of request-level policy claims |
-| Malicious/misconfigured third-party `RoutingStrategy` | Strategy interface is a pure function with no side-effect capability and no access to adapter internals or credentials (see [docs/routing.md](routing.md)) |
+| Malicious/misconfigured third-party `RoutingStrategy` | Strategy interface is a pure function with no side-effect capability and no access to adapter internals or credentials (see [routing.md](routing.md)) |
