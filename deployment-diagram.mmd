@@ -1,0 +1,76 @@
+%% Deployment Diagram — ModelRouter (Kubernetes)
+graph TB
+    subgraph Internet
+        Client[Client Applications]
+    end
+
+    subgraph K8s["Kubernetes Cluster — namespace: modelrouter"]
+        Ingress[Ingress / LoadBalancer<br/>TLS termination]
+
+        subgraph GatewayDeploy["Deployment: modelrouter-gateway<br/>HPA 3-50 replicas"]
+            Pod1[gateway pod 1]
+            Pod2[gateway pod 2]
+            PodN[gateway pod N]
+        end
+
+        subgraph AdminDeploy["Deployment: modelrouter-admin<br/>2 replicas"]
+            AdminPod[admin pod]
+        end
+
+        subgraph DashDeploy["Deployment: modelrouter-dashboard<br/>2 replicas"]
+            DashPod[dashboard pod]
+        end
+
+        ConfigMap[ConfigMap: runtime config]
+        SecretRef[Secret refs → external secrets backend]
+        SvcMonitor[ServiceMonitor → Prometheus Operator]
+        NetPol[NetworkPolicy: egress + internal deps only]
+    end
+
+    subgraph ExternalDeps["External / Managed Services"]
+        Redis[(Redis Cluster)]
+        Postgres[(PostgreSQL)]
+        Kafka[(Kafka Cluster)]
+        Vault[(Vault / Cloud KMS)]
+    end
+
+    subgraph ObsStack["Observability Stack"]
+        OTel[OTel Collector]
+        Prom[Prometheus]
+        Grafana[Grafana]
+        Langfuse[Langfuse]
+    end
+
+    subgraph Providers["Inference Providers"]
+        Cloud[OpenAI / Anthropic / Gemini / Groq / Fireworks / Together / Azure]
+        Local[Ollama / vLLM / Baseten]
+    end
+
+    Client --> Ingress
+    Ingress --> Pod1 & Pod2 & PodN
+
+    Pod1 & Pod2 & PodN --> Redis
+    Pod1 & Pod2 & PodN --> Kafka
+    Pod1 & Pod2 & PodN --> Cloud
+    Pod1 & Pod2 & PodN --> Local
+    Pod1 & Pod2 & PodN -.-> OTel
+
+    AdminPod --> Postgres
+    AdminPod -. policy events .-> Kafka
+    AdminPod -.-> OTel
+
+    DashPod --> AdminPod
+    DashPod --> Grafana
+
+    GatewayDeploy -. reads .-> ConfigMap
+    GatewayDeploy -. reads .-> SecretRef
+    SecretRef --> Vault
+
+    SvcMonitor --> Pod1 & Pod2 & PodN & AdminPod
+    SvcMonitor --> Prom
+
+    OTel --> Prom
+    OTel --> Langfuse
+    Prom --> Grafana
+
+    NetPol -. governs .-> GatewayDeploy

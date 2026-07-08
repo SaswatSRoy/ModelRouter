@@ -1,0 +1,40 @@
+%% Sequence Diagram — Inference Request with Fallback
+sequenceDiagram
+    autonumber
+    participant C as Client (SDK)
+    participant I as router-ingress
+    participant Sec as router-security
+    participant Core as router-core
+    participant Cache as router-cache (Redis)
+    participant P1 as provider-anthropic
+    participant P2 as provider-openai
+    participant K as Kafka
+
+    C->>I: POST /v1/inference (policy, messages)
+    I->>Sec: authenticate + authorize + rate-limit check
+    Sec-->>I: OK (tenantId resolved)
+    I->>Core: route(InferenceRequest)
+
+    Core->>Core: resolve effective RoutingPolicy
+    Core->>Cache: lookup(cacheKey)
+    Cache-->>Core: miss
+
+    Core->>Core: enumerate eligible candidates
+    Core->>Cache: fetch live provider scores
+    Cache-->>Core: scores (latency, error rate, cost, capacity)
+    Core->>Core: RoutingStrategy.rank() → [anthropic, openai]
+
+    Core->>P1: invoke(request)  %% attempt 1
+    P1-->>Core: 503 Service Unavailable
+
+    Note over Core: retryable failure, pre-first-byte → advance to next candidate
+
+    Core->>P2: invoke(request)  %% attempt 2
+    P2-->>Core: 200 OK (completion)
+
+    Core->>Core: normalize response
+    Core-->>I: InferenceResponse (routing trace: anthropic failed, openai succeeded)
+    I-->>C: 200 OK
+
+    Core-)K: emit usage/cost/latency event (async, off hot path)
+    K-)Cache: async score update consumer refreshes provider scores

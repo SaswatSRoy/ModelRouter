@@ -1,0 +1,69 @@
+%% Component Diagram — ModelRouter
+graph TB
+    subgraph Clients
+        SDKJava[sdk-java]
+        SDKAndroid[sdk-android]
+        RESTClient[REST / gRPC client]
+    end
+
+    subgraph Gateway["modelrouter-gateway"]
+        Ingress[router-ingress<br/>WebFlux, REST/gRPC/SSE]
+        Security[router-security<br/>AuthN/AuthZ, rate limit]
+        Core[router-core<br/>policy · strategy · scoring · execution · reliability]
+        SPI[router-provider-spi<br/>InferenceProvider port]
+        Cache[router-cache<br/>prompt+semantic cache]
+
+        subgraph Adapters["provider-adapters/*"]
+            OpenAI[provider-openai]
+            Anthropic[provider-anthropic]
+            Gemini[provider-gemini]
+            Ollama[provider-ollama]
+            Baseten[provider-baseten]
+            VLLM[provider-vllm]
+            Groq[provider-groq]
+            Fireworks[provider-fireworks]
+            Together[provider-togetherai]
+            Azure[provider-azure-openai]
+        end
+    end
+
+    subgraph Management["modelrouter-admin"]
+        Admin[router-admin<br/>CQRS command side]
+    end
+
+    subgraph UI["modelrouter-dashboard"]
+        Dashboard[router-dashboard]
+    end
+
+    Obs[router-observability<br/>OTel · Prometheus · Langfuse]
+
+    Redis[(Redis)]
+    Postgres[(PostgreSQL)]
+    Kafka[(Kafka)]
+
+    SDKJava --> Ingress
+    SDKAndroid --> Ingress
+    RESTClient --> Ingress
+
+    Ingress --> Security
+    Security --> Core
+    Core --> Cache
+    Core --> SPI
+    SPI --> OpenAI & Anthropic & Gemini & Ollama & Baseten & VLLM & Groq & Fireworks & Together & Azure
+
+    Cache --> Redis
+    Core --> Redis
+
+    Admin --> Postgres
+    Admin -. policy change events .-> Kafka
+    Kafka -. hot reload .-> Core
+    Core -. usage events .-> Kafka
+
+    Dashboard --> Admin
+    Dashboard --> Obs
+
+    Core -. traces/metrics .-> Obs
+    Ingress -. traces/metrics .-> Obs
+
+    OpenAI & Anthropic & Gemini & Groq & Fireworks & Together & Azure -->|HTTPS| ExternalCloud[External Cloud Providers]
+    Ollama & VLLM & Baseten -->|local/self-hosted| LocalInference[Local / Self-Hosted Inference]

@@ -1,0 +1,57 @@
+%% Provider Architecture — Ports & Adapters
+graph TB
+    subgraph Domain["router-core (domain)"]
+        Execution[ExecutionEngine]
+    end
+
+    subgraph Port["router-provider-spi (the port)"]
+        Iface["«interface» InferenceProvider
+        + id()
+        + invoke()
+        + invokeStreaming()
+        + capabilities()
+        + healthCheck()
+        + estimateCost()"]
+    end
+
+    subgraph CloudAdapters["Cloud Provider Adapters"]
+        A1[provider-openai]
+        A2[provider-anthropic]
+        A3[provider-gemini]
+        A4[provider-groq]
+        A5[provider-fireworks]
+        A6[provider-togetherai]
+        A7[provider-azure-openai]
+    end
+
+    subgraph LocalAdapters["Local / Self-Hosted Adapters"]
+        A8[provider-ollama]
+        A9[provider-vllm]
+        A10[provider-baseten]
+    end
+
+    Execution -->|depends on| Iface
+    Iface -.implements.- A1
+    Iface -.implements.- A2
+    Iface -.implements.- A3
+    Iface -.implements.- A4
+    Iface -.implements.- A5
+    Iface -.implements.- A6
+    Iface -.implements.- A7
+    Iface -.implements.- A8
+    Iface -.implements.- A9
+    Iface -.implements.- A10
+
+    A1 --> OpenAISDK[OpenAI SDK/HTTP]
+    A2 --> AnthropicSDK[Anthropic SDK/HTTP]
+    A3 --> GeminiSDK[Gemini SDK/HTTP]
+    A4 --> GroqSDK[Groq SDK/HTTP]
+    A5 --> FireworksSDK[Fireworks SDK/HTTP]
+    A6 --> TogetherSDK[Together AI SDK/HTTP]
+    A7 --> AzureSDK[Azure OpenAI SDK/HTTP]
+    A8 --> OllamaHTTP[Ollama local HTTP API]
+    A9 --> VLLMHTTP[vLLM OpenAI-compatible API]
+    A10 --> BasetenHTTP[Baseten deployment API]
+
+    style Domain fill:#eef,stroke:#33f
+    style Port fill:#ffe,stroke:#aa0

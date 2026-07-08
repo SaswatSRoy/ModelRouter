@@ -1,0 +1,32 @@
+%% Routing Flow — ModelRouter Core Pipeline
+flowchart TD
+    Start([InferenceRequest received]) --> Cache{Cache hit?}
+    Cache -- yes --> ReturnCached[Return cached response]
+    Cache -- no --> Policy[Resolve effective RoutingPolicy<br/>system → tenant → request]
+
+    Policy --> Enum[Enumerate eligible candidates<br/>capability match, not excluded]
+    Enum --> Eligible{Any eligible<br/>candidates?}
+    Eligible -- no --> ErrUnsat[Error: POLICY_UNSATISFIABLE]
+
+    Eligible -- yes --> Score[Attach live scores<br/>latency · error rate · cost · capacity]
+    Score --> Strategy[RoutingStrategy.rank<br/>e.g. cheapest-viable, lowest-latency, AI-powered]
+    Strategy --> Ranked[Ranked candidate list]
+
+    Ranked --> Invoke[Invoke top candidate via adapter]
+    Invoke --> Outcome{Outcome?}
+
+    Outcome -- success --> Normalize[Normalize response]
+    Normalize --> WriteCache[Write-through cache]
+    WriteCache --> EmitEvents[Emit usage/cost events → Kafka async]
+    EmitEvents --> Return([Return response to client])
+
+    Outcome -- retryable failure<br/>pre-first-byte --> RetryCheck{Retry budget<br/>remaining?}
+    RetryCheck -- yes --> Backoff[Apply backoff] --> Invoke
+    RetryCheck -- no --> NextCandidate{Next candidate<br/>in ranked list?}
+
+    Outcome -- non-retryable failure --> NextCandidate
+    NextCandidate -- yes --> Invoke
+    NextCandidate -- no --> ErrExhausted[Error: ALL_CANDIDATES_EXHAUSTED]
+
+    ErrUnsat --> ReturnErr([Return error to client])
+    ErrExhausted --> ReturnErr

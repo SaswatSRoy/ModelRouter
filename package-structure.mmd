@@ -1,0 +1,48 @@
+%% Package / Module Structure — ModelRouter (Gradle multi-module)
+graph TD
+    Root["modelrouter (root)"]
+
+    Root --> Ingress[router-ingress]
+    Root --> CoreMod[router-core]
+    Root --> SPI[router-provider-spi]
+    Root --> CacheMod[router-cache]
+    Root --> AdminMod[router-admin]
+    Root --> SecurityMod[router-security]
+    Root --> ObsMod[router-observability]
+    Root --> DashboardMod[router-dashboard]
+    Root --> AdaptersRoot[provider-adapters]
+    Root --> SDKs[sdk]
+
+    CoreMod --> CorePolicy["core.policy<br/>RoutingPolicy, PolicyResolver"]
+    CoreMod --> CoreStrategy["core.strategy<br/>RoutingStrategy + built-ins"]
+    CoreMod --> CoreScoring["core.scoring<br/>ProviderScorer"]
+    CoreMod --> CoreExecution["core.execution<br/>ExecutionEngine"]
+    CoreMod --> CoreReliability["core.reliability<br/>RetryPolicy, CircuitBreaker"]
+
+    AdaptersRoot --> POpenAI[provider-openai]
+    AdaptersRoot --> PAnthropic[provider-anthropic]
+    AdaptersRoot --> PGemini[provider-gemini]
+    AdaptersRoot --> POllama[provider-ollama]
+    AdaptersRoot --> PBaseten[provider-baseten]
+    AdaptersRoot --> PVLLM[provider-vllm]
+    AdaptersRoot --> PGroq[provider-groq]
+    AdaptersRoot --> PFireworks[provider-fireworks]
+    AdaptersRoot --> PTogether[provider-togetherai]
+    AdaptersRoot --> PAzure[provider-azure-openai]
+
+    SDKs --> SDKJava[sdk-java]
+    SDKs --> SDKAndroid[sdk-android]
+
+    CoreMod -.depends on.-> SPI
+    Ingress -.depends on.-> CoreMod
+    POpenAI & PAnthropic & PGemini & POllama & PBaseten & PVLLM & PGroq & PFireworks & PTogether & PAzure -.implements.-> SPI
+    CacheMod -.used by.-> CoreMod
+    SecurityMod -.used by.-> Ingress
+    ObsMod -.instruments.-> Ingress
+    ObsMod -.instruments.-> CoreMod
+    AdminMod -.publishes config to.-> CoreMod
+    DashboardMod -.calls.-> AdminMod
+    SDKJava & SDKAndroid -.calls REST/gRPC.-> Ingress
+
+    style SPI fill:#ffe,stroke:#aa0
+    style CoreMod fill:#eef,stroke:#33f
