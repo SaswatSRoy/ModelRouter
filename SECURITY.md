@@ -10,7 +10,7 @@ This document describes how to report security vulnerabilities in ModelRouter an
 
 Instead, report vulnerabilities by emailing:
 
-**modelrouter-security@googlegroups.com**
+**saswatsuman78@gmail.com**
 
 Include the following in your report:
 
