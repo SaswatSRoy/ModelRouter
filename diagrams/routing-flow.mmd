@@ -17,7 +17,7 @@ flowchart TD
         Eligible -- no --> ErrUnsat["Error: POLICY_UNSATISFIABLE"]
         Eligible -- yes --> Score["ProviderScorer<br/>latency · error rate · cost · capacity"]
         Score --> Strategy["RoutingStrategy.rank()<br/>e.g. cheapest-viable, lowest-latency"]
-        Strategy --> Ranked[Ranked candidate list]
+        Strategy --> Ranked[ExecutionPlan]
     end
 
     Ranked --> Runtime

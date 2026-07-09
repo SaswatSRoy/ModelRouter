@@ -72,13 +72,15 @@ Goal: cloud-native, horizontally scalable, and observable enough to be trusted a
 
 Not committed, order not implied — explored as the ecosystem and adopter needs clarify:
 
-- AI-powered adaptive routing strategy (a `RoutingStrategy` implementation backed by a learned model — no core changes required, see RFC-001 §7)
-- Dynamic/hot-pluggable provider loading (plugin marketplace)
-- Hosted multi-tenant SaaS control plane
-- Multi-modal request routing (image/audio capability-aware provider selection)
-- Additional SDKs: Python, Go, TypeScript
-- Policy marketplace / shareable routing policy templates
-- Go-based lightweight edge/sidecar variant for in-cluster local-only routing
+- [ ] `AdaptiveRoutingEngine` (backed by explicit `FeedbackEvent`s)
+- [ ] Policy-driven `ContextOptimizer` (summarization/compression)
+- [ ] Pluggable `RequestAnalyzer` for routing (rules, ML, or LLMs)
+- [ ] Dynamic/hot-pluggable provider loading (plugin marketplace)
+- [ ] Hosted multi-tenant SaaS control plane
+- [ ] Multi-modal request routing (image/audio capability-aware provider selection)
+- [ ] Additional SDKs: Python, Go, TypeScript
+- [ ] Policy marketplace / shareable routing policy templates
+- [ ] Go-based lightweight edge/sidecar variant for in-cluster local-only routing
 
 ## Non-Goals
 
@@ -87,5 +89,6 @@ Explicitly out of scope, tracked so they don't silently creep back in (see also 
 - Model fine-tuning or training orchestration
 - Prompt templating/authoring frameworks
 - Zero-external-dependency deployment mode (Redis/Postgres/Kafka assumed) — may be revisited post-1.0
-- Browser-frontend SDK
+- Browser-frontend SDK and direct end-user clients (e.g. Telegram bots or chatbot UIs)
 - Cross-cloud data residency guarantees beyond privacy-tier routing
+- Knowledge-graph-heavy optimization not tied to routing or context policy

@@ -9,6 +9,12 @@ The routing pipeline is decomposed into three subsystems (see [rfcs/RFC-001.md](
 ```
 InferenceRequest
    ┌──────────────────────────────────────────────────────────────┐
+   │  CONTEXT OPTIMIZER (Future RFC)                              │
+   │  (Summarization, compression, trimming, influenced by        │
+   │   external FeedbackEvents)                                   │
+   └──────────────────────────┬───────────────────────────────────┘
+                              ▼
+   ┌──────────────────────────────────────────────────────────────┐
    │  POLICY ENGINE (core.policy)                                 │
    │  PolicyResolver        (resolve effective RoutingPolicy:     │
    │                         system default + tenant + request)   │
@@ -16,13 +22,15 @@ InferenceRequest
                               ▼
    ┌──────────────────────────────────────────────────────────────┐
    │  EXECUTION PLANNER (core.planner)                            │
+   │  RequestAnalyzer       (pluggable abstraction for request    │
+   │                         semantic intent categorization)      │
    │  CandidateEnumerator   (structurally eligible: capability    │
    │                         match, privacy tier, not excluded)   │
    │  ProviderScorer        (attach live scores: latency, error   │
    │                         rate, cost, capacity headroom)       │
    │  RoutingStrategy       (rank eligible candidates per policy) │
    └──────────────────────────┬───────────────────────────────────┘
-                              ▼  ranked candidate list
+                              ▼  ExecutionPlan
    ┌──────────────────────────────────────────────────────────────┐
    │  EXECUTION RUNTIME (core.execution)                          │
    │  ExecutionEngine       (invoke top candidate; on failure,    │
@@ -32,7 +40,7 @@ InferenceRequest
    └──────────────────────────────────────────────────────────────┘
 ```
 
-Each subsystem is independently testable. The boundary between them is a well-defined data contract: policy engine outputs a `RoutingPolicy`, planner outputs a `List<ProviderCandidate>`, runtime outputs an `InferenceResponse`.
+Each subsystem is independently testable. The boundary between them is a well-defined data contract: policy engine outputs a `RoutingPolicy`, planner outputs an `ExecutionPlan`, runtime outputs an `InferenceResponse`.
 
 ## Policy Engine (`core.policy`)
 
@@ -109,7 +117,7 @@ No access to adapter internals, no side effects expected or permitted — a stra
 
 ### Retry & Fallback
 
-Retry and fallback are unified: the execution planner output is an **ordered candidate list**, not a single choice. The `ExecutionEngine` walks the list:
+Retry and fallback are unified: the execution planner output is an **`ExecutionPlan`**, not a single choice. The `ExecutionEngine` walks the plan:
 
 1. Invoke candidate N.
 2. On a retryable failure (timeout, 429, 5xx) *before the first response byte*, and while candidate N's own retry budget (from `RetryPolicy`) isn't exhausted, retry candidate N with backoff.

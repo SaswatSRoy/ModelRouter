@@ -28,9 +28,9 @@ sequenceDiagram
     EP->>Cache: fetch live provider scores
     Cache-->>EP: scores (latency, error rate, cost, capacity)
     EP->>EP: RoutingStrategy.rank() → [anthropic, openai]
-    EP-->>I: ranked candidate list
+    EP-->>I: ExecutionPlan
 
-    I->>ER: execute(rankedCandidates, request)
+    I->>ER: execute(executionPlan, request)
     ER->>P1: invoke(request)  %% attempt 1
     P1-->>ER: 503 Service Unavailable
 

@@ -42,7 +42,11 @@ See [diagrams/component-diagram.mmd](diagrams/component-diagram.mmd) for the ful
 
 ### 3.2 `router-core` (the domain)
 
-**Responsibility:** The routing domain itself. Pure domain logic, framework-agnostic where possible. The former monolithic "routing engine" is decomposed into three distinct subsystems with clear boundaries:
+**Responsibility:** The routing domain itself. Pure domain logic, framework-agnostic where possible. The former monolithic "routing engine" is decomposed into distinct subsystems with clear boundaries:
+
+#### 3.2.0 ContextOptimizer (Future/RFC)
+
+**Responsibility:** A pre-execution step that applies policy-driven transformations to the prompt context (e.g., summarization, compression, trimming) before it reaches the policy engine or planner. This will be an optional, generic pipeline, potentially influenced by external `FeedbackEvent`s (like user satisfaction signals), but the pipeline itself will not compute these signals.
 
 #### 3.2.1 Policy Engine (`core.policy`)
 
@@ -61,6 +65,7 @@ Components:
 
 Components:
 - `CandidateEnumerator` — filters the provider registry to structurally eligible candidates (capability match, not excluded, privacy-tier compatible). This is where `LOCAL_ONLY` enforcement happens — it is a structural exclusion, not a scoring signal.
+- `RequestAnalyzer` (Future) — a pluggable abstraction (e.g. rule-based, ML, or LLM) to analyze the request's semantic intent, complexity, or safety and inform the routing strategy. We explicitly avoid hardcoding models like Random Forest here.
 - `ProviderScorer` — attaches live composite scores to each eligible candidate (latency EWMA, error rate, cost per token, capacity headroom). Scores are read from Redis (shared across pods) with a short-TTL in-process L1 cache.
 - `RoutingStrategy` — a pluggable interface that ranks scored candidates according to the policy. Built-in strategies: `LowestLatencyStrategy`, `CheapestViableStrategy`, `WeightedRoundRobinStrategy`, `PrivacyConstrainedStrategy`. Third-party strategies implement the same interface.
 
@@ -68,15 +73,15 @@ Components:
 
 #### 3.2.3 Execution Runtime (`core.execution`)
 
-**Responsibility:** Takes the ranked candidate list from the execution planner and executes it: invoke the top candidate via its adapter, manage retries and fallback, enforce circuit-breaker state, and normalize the response.
+**Responsibility:** Takes the `ExecutionPlan` from the execution planner and executes it: invoke the top candidate via its adapter, manage retries and fallback, enforce circuit-breaker state, and normalize the response.
 
 Components:
-- `ExecutionEngine` — the state machine that walks the candidate list. On a retryable failure (pre-first-byte), retries the current candidate with backoff up to the retry budget, then advances to the next candidate.
+- `ExecutionEngine` — the state machine that walks the candidate list in the `ExecutionPlan`. On a retryable failure (pre-first-byte), retries the current candidate with backoff up to the retry budget, then advances to the next candidate.
 - `CircuitBreakerRegistry` — per-(provider, model) circuit breakers. State: CLOSED → OPEN (on error-rate threshold) → HALF_OPEN (after cooldown) → CLOSED (on sustained success).
 - `ResponseNormalizer` — translates provider-specific response shapes into the canonical `InferenceResponse` / `InferenceChunk` stream.
 - `RetryPolicy` engine — configurable per `RoutingPolicy`: max attempts, backoff strategy, retryable failure classes.
 
-**Why a separate subsystem:** Execution is inherently stateful and side-effectful (network I/O, circuit-breaker mutations, retry state). Isolating it from planning means a bug in retry logic cannot corrupt candidate ranking, and a bug in scoring cannot cause an adapter to be invoked incorrectly. It also allows execution to be tested with fake adapters against known candidate lists, without requiring a real planner.
+**Why a separate subsystem:** Execution is inherently stateful and side-effectful (network I/O, circuit-breaker mutations, retry state). Isolating it from planning means a bug in retry logic cannot corrupt candidate ranking, and a bug in scoring cannot cause an adapter to be invoked incorrectly. It also allows execution to be tested with fake adapters against known `ExecutionPlan`s, without requiring a real planner.
 
 ### 3.3 `router-provider-spi`
 **Responsibility:** The *port* — a stable interface (`InferenceProvider`) that every provider adapter must implement: `invoke()`, `invokeStreaming()`, `capabilities()`, `healthCheck()`, `estimateCost()`. This module has near-zero external dependencies and changes rarely; it is the contract that makes "add a provider without touching the core" possible. See [docs/provider-contract.md](docs/provider-contract.md) for the full contract specification and versioning rules.
@@ -86,6 +91,7 @@ One module per provider (`provider-openai`, `provider-anthropic`, `provider-gemi
 
 - Implements `InferenceProvider` from `router-provider-spi`.
 - Owns its own SDK/HTTP client, auth, error-mapping, and rate-limit handling.
+- Treats local execution (e.g. Ollama, vLLM) as a first-class routing target, not a separate product.
 - Is independently deployable/loadable (see §6, "Should providers be loaded dynamically?").
 - Is independently testable via Testcontainers/WireMock without booting the whole router.
 - Must pass the shared SPI contract test suite (see [docs/provider-contract.md](docs/provider-contract.md)).
@@ -118,7 +124,7 @@ The canonical request flow (see [diagrams/sequence-diagram.mmd](diagrams/sequenc
 2. `router-security` authenticates/authorizes, rate-limiter checks quota.
 3. **Policy Engine:** `core.policy.PolicyResolver` resolves the effective `RoutingPolicy` for the tenant/request.
 4. `router-cache` checks for a cache hit (short-circuits the pipeline below if hit).
-5. **Execution Planner:** `core.planner.CandidateEnumerator` filters to eligible candidates; `core.planner.ProviderScorer` retrieves live scores from Redis; `core.planner.RoutingStrategy` produces a ranked candidate list.
+5. **Execution Planner:** `core.planner.CandidateEnumerator` filters to eligible candidates; `core.planner.ProviderScorer` retrieves live scores from Redis; `core.planner.RoutingStrategy` produces an `ExecutionPlan`.
 6. **Execution Runtime:** `core.execution.ExecutionEngine` invokes the top candidate via its adapter (from `provider-adapters/*`).
 7. On failure (timeout, 5xx, rate-limit), `core.execution` applies the retry/fallback policy and advances to the next candidate.
 8. Response (or stream) is normalized into a provider-agnostic shape and returned to the client.
