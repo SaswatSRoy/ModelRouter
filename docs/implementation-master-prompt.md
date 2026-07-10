@@ -40,7 +40,9 @@ Every implementation decision must align with them. If implementation exposes cr
 
 ### Clean Architecture & Dependency Direction
 The domain is the product. Everything else is infrastructure. The dependency direction must always be:
-$$\text{Infrastructure} \rightarrow \text{Application} \rightarrow \text{Domain}$$
+```
+Infrastructure → Application → Domain
+```
 Never the reverse. No framework may leak into the domain.
 
 ### Module Boundaries
@@ -100,7 +102,7 @@ These are long-lived public contracts. Ensure they are clean, reactive, and prov
 ### Phase 4: Policy Engine
 Implement the Policy Engine inside `core.policy`:
 * `PolicyResolver`
-* Hierarchical merge logic (System $\rightarrow$ Tenant $\rightarrow$ Request)
+* Hierarchical merge logic (System → Tenant → Request)
 * Validation and constraints enforcement (e.g., tightening rules for `privacyTier`)
 
 This must be pure Java: no networking, no DB, and fully unit-tested.
@@ -128,7 +130,9 @@ Implement `provider-fake` (implementing `InferenceProvider` SPI):
 
 ### Phase 8: Milestone 1 Verification
 Create a comprehensive integration test that validates the end-to-end flow:
-$$\text{InferenceRequest} \rightarrow \text{Policy Engine} \rightarrow \text{Execution Planner} \rightarrow \text{Execution Runtime} \rightarrow \text{Fake Provider} \rightarrow \text{InferenceResponse}$$
+```
+InferenceRequest → Policy Engine → Execution Planner → Execution Runtime → Fake Provider → InferenceResponse
+```
 
 If this end-to-end integration test passes, Milestone 1 is officially complete.
 
