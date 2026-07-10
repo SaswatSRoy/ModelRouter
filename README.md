@@ -73,8 +73,8 @@ Explicitly out of scope — tracked so they don't silently creep back in:
 | **Reliability** | Configurable retry strategies, automatic fallback via `ExecutionPlan`, health checks, circuit breaking |
 | **Performance** | Streaming-first design, prompt caching, semantic caching, latency-aware routing |
 | **Cost & Privacy** | Cost-aware routing, privacy-aware routing, local-vs-cloud inference selection (local execution treated as a first-class routing target) |
-| **Extensibility** | Provider adapter contract with SPI versioning, pluggable routing strategies, future `AdaptiveRoutingEngine` with feedback loop |
-| **Advanced Pre-processing** | (Future) Policy-driven `ContextOptimizer`, pluggable `RequestAnalyzer` (rules, ML, or LLMs) |
+| **Extensibility** | Provider adapter contract with SPI versioning, pluggable routing strategies, future `AdaptiveRoutingEngine` with `FeedbackEvent`s |
+| **Advanced Pre-processing** | Policy-driven `ContextOptimizer` (Future), pluggable `RequestAnalyzer` (Future) (rules, ML, or LLMs) |
 | **Platform** | AuthN/AuthZ, rate limiting, multi-tenant support, admin dashboard |
 | **Observability** | Metrics (Prometheus), distributed tracing (OpenTelemetry), Langfuse integration |
 | **Operability** | Kubernetes-native deployment, horizontal scaling, Docker-first packaging |
@@ -97,7 +97,7 @@ Explicitly out of scope — tracked so they don't silently creep back in:
                      │  └─────┬──────┘  └──────────┬──────────┘ │
                      │        ▼                    ▼            │
                      │  ┌───────────────────────────────────┐   │
-                     │  │      ContextOptimizer (RFC)         │   │
+                     │  │      ContextOptimizer (Future)      │   │
                      │  │   Summarize / compress context      │   │
                      │  └───────────────┬───────────────────┘   │
                      │                  ▼                        │
@@ -108,7 +108,7 @@ Explicitly out of scope — tracked so they don't silently creep back in:
                      │                  ▼                        │
                      │  ┌───────────────────────────────────┐   │
                      │  │       Execution Planner             │   │
-                     │  │  RequestAnalyzer (pluggable)        │   │
+                     │  │  RequestAnalyzer (Future)           │   │
                      │  │  enumerate → score → rank           │   │
                      │  │  candidates via RoutingStrategy     │   │
                      │  └───────────────┬───────────────────┘   │
@@ -210,7 +210,7 @@ ModelRouter is currently in **design phase**. No implementation has begun. The p
 - **Phase 1** — Core routing (policy engine, execution planner, execution runtime), single-provider adapters (OpenAI, Anthropic), synchronous + streaming completions, static routing policies, basic observability.
 - **Phase 2** — Multi-provider fallback (`ExecutionPlan`), cost/latency-aware routing, Redis-backed caching, Kafka-based event pipeline, health checks, dashboard v1.
 - **Phase 3** — Kubernetes-native operator, horizontal autoscaling, semantic caching, Langfuse integration, Android/Java SDKs GA.
-- **Stretch** — `AdaptiveRoutingEngine` based on `FeedbackEvent`s, `ContextOptimizer`, pluggable `RequestAnalyzer`, multi-region active-active deployment.
+- **Stretch** — `AdaptiveRoutingEngine` (Future) based on `FeedbackEvent`s, `ContextOptimizer` (Future), pluggable `RequestAnalyzer` (Future), multi-region active-active deployment.
 
 Details in [ROADMAP.md](ROADMAP.md).
 

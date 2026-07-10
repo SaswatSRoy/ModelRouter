@@ -11,19 +11,19 @@ The system is designed around explicit terminology to avoid conceptual overlap. 
 ## 2. Core Domain Objects
 
 ### **InferenceRequest**
-The canonical request object accepted by the Gateway. Encapsulates the prompt, required capabilities, model preferences, and tenant context. The request represents *intent*, not a specific destination.
+The canonical request object entering the ModelRouter control plane. Encapsulates the prompt, required capabilities, model preferences, and tenant context. The request represents *intent*, not a specific destination.
 
 ### **RoutingPolicy**
 The deterministic object resolved by the Policy Engine that dictates constraints (cost, latency, privacy) and routing preferences.
 
 ### **ExecutionPlan**
-An immutable ordered sequence of `ProviderCandidate`s produced by the Execution Planner. This replaces concepts like "fallback chain" or "ranked candidate list". The Execution Runtime consumes this plan.
+An immutable ordered sequence of `ProviderCandidate`s produced by the Execution Planner. The Execution Runtime consumes this plan.
 
 ### **ExecutionRuntime**
 The subsystem responsible for consuming the `ExecutionPlan`, executing requests, managing retries and fallbacks, enforcing circuit breaker states, and normalizing responses.
 
 ### **ProviderAdapter**
-A concrete implementation of the inference provider contract. It encapsulates all provider-specific SDKs, error mappings, and HTTP client interactions. 
+A concrete implementation of the inference provider contract. It encapsulates all provider-specific translation, error mappings, and upstream interactions. 
 
 ### **ProviderCapability**
 A discrete feature or requirement (e.g., `128k-context`, `function-calling`, `vision`) that providers declare and `InferenceRequest`s require.
@@ -35,10 +35,10 @@ A `(provider, model)` pair evaluated for eligibility. Enriched during planning w
 A provider-neutral repository mapping models and providers to their supported `ProviderCapability` sets, cost models, and structural constraints.
 
 ### **RequestAnalyzer**
-A pluggable component responsible for analyzing an `InferenceRequest` to determine semantic intent, complexity, or safety. Formerly referred to as "Intent Classifier," this generalized analyzer informs routing policies and optimization steps.
+A pluggable component (Future) responsible for analyzing an `InferenceRequest` to determine semantic intent, complexity, or safety. It outputs augmented request context and metrics to inform routing policies and optimization steps, but does not make routing decisions itself.
 
 ### **ContextOptimizer**
-A policy-driven pre-execution pipeline that applies transformations to the prompt context (e.g., summarization, compression, or trimming) before routing occurs.
+A policy-driven pre-execution pipeline (Future) that applies transformations to the prompt context (e.g., summarization, compression, or trimming) before routing occurs.
 
 ### **ContextPolicy**
 Configuration defining if and how context optimization should occur (e.g., max token limits for summarization, strict truncation).
@@ -47,7 +47,7 @@ Configuration defining if and how context optimization should occur (e.g., max t
 An append-only signal from client applications (e.g., user satisfaction, task success metric, error report) that is ingested by ModelRouter to inform historical provider scoring and future adaptive routing.
 
 ### **AdaptiveRoutingEngine**
-An advanced routing strategy component that adjusts provider rankings dynamically based on historical execution data and ingested `FeedbackEvent`s.
+An advanced routing strategy component (Future) that adjusts provider rankings dynamically based on historical execution data and ingested `FeedbackEvent`s.
 
 ### **InferenceResponse**
 The canonical, normalized response object returned to the client, encapsulating the model output, token usage, and optional tracing metadata.
@@ -56,10 +56,10 @@ The canonical, normalized response object returned to the client, encapsulating 
 
 Each subsystem owns exactly one responsibility. No subsystem should have overlapping responsibilities, and data boundaries are strict.
 
-* **Request Analysis** → Owned by `RequestAnalyzer`. Outputs augmented request context and intent metrics.
-* **Policy Engine** → Resolves constraints and overrides. Outputs `RoutingPolicy`.
+* **Request Analysis** → Owned by `RequestAnalyzer`. Outputs augmented request context and intent metrics, but does not make routing decisions.
+* **Policy Engine** → Owns constraint and override resolution. Outputs `RoutingPolicy`.
 * **Execution Planner** → Owns candidate selection and scoring. Consumes `RoutingPolicy` and outputs `ExecutionPlan`.
-* **Execution Runtime** → Owns invocation orchestration, fallback, and circuit breaking. Consumes `ExecutionPlan` and outputs `InferenceResponse`.
+* **Execution Runtime** → Owns invocation orchestration, circuit breaking, and advancing through the `ExecutionPlan`. Consumes `ExecutionPlan` and outputs `InferenceResponse`.
 * **Provider Adapter** → Owns provider-specific communication and translation. Implements the SPI and exposes only provider-agnostic data to the Execution Runtime.
 
 ## 4. Architectural Invariants

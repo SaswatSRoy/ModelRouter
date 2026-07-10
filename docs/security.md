@@ -36,7 +36,7 @@ TLS termination at the ingress (or mTLS end-to-end within a service mesh). Outbo
 
 ## Rate Limiting & Abuse Prevention
 
-Token-bucket rate limiting, enforced per-tenant at `router-ingress` before a request reaches the routing engine, backed by Redis counters shared across gateway pods (consistent with the stateless-pod scalability decision in [ARCHITECTURE.md](../ARCHITECTURE.md) §6). This protects both ModelRouter itself and downstream provider rate limits/cost exposure from a single misbehaving tenant.
+Token-bucket rate limiting, enforced per-tenant at `router-ingress` before a request reaches the core routing subsystems, backed by Redis counters shared across gateway pods (consistent with the stateless-pod scalability decision in [ARCHITECTURE.md](../ARCHITECTURE.md) §6). This protects both ModelRouter itself and downstream provider rate limits/cost exposure from a single misbehaving tenant.
 
 ## Audit
 

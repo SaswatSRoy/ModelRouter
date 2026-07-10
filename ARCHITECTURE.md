@@ -61,7 +61,7 @@ Components:
 
 #### 3.2.2 Execution Planner (`core.planner`)
 
-**Responsibility:** Given a resolved `RoutingPolicy`, produces a ranked list of `ProviderCandidate`s ready for execution. This subsystem owns the "which providers, in what order" question.
+**Responsibility:** Given a resolved `RoutingPolicy`, produces an `ExecutionPlan` containing `ProviderCandidate`s ready for execution. This subsystem owns the "which providers, in what order" question.
 
 Components:
 - `CandidateEnumerator` — filters the provider registry to structurally eligible candidates (capability match, not excluded, privacy-tier compatible). This is where `LOCAL_ONLY` enforcement happens — it is a structural exclusion, not a scoring signal.
@@ -76,7 +76,7 @@ Components:
 **Responsibility:** Takes the `ExecutionPlan` from the execution planner and executes it: invoke the top candidate via its adapter, manage retries and fallback, enforce circuit-breaker state, and normalize the response.
 
 Components:
-- `ExecutionEngine` — the state machine that walks the candidate list in the `ExecutionPlan`. On a retryable failure (pre-first-byte), retries the current candidate with backoff up to the retry budget, then advances to the next candidate.
+- `ExecutionEngine` — the state machine that walks the `ExecutionPlan`. On a retryable failure (pre-first-byte), retries the current candidate with backoff up to the retry budget, then advances to the next candidate.
 - `CircuitBreakerRegistry` — per-(provider, model) circuit breakers. State: CLOSED → OPEN (on error-rate threshold) → HALF_OPEN (after cooldown) → CLOSED (on sustained success).
 - `ResponseNormalizer` — translates provider-specific response shapes into the canonical `InferenceResponse` / `InferenceChunk` stream.
 - `RetryPolicy` engine — configurable per `RoutingPolicy`: max attempts, backoff strategy, retryable failure classes.

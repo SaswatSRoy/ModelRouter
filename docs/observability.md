@@ -2,7 +2,7 @@
 
 ## Philosophy
 
-Every routing decision must be explainable after the fact without reproducing it — "which providers were considered, which was chosen, why, what it cost, and how long it took" is baseline information, not a debug-mode luxury. Observability is wired at module boundaries via interceptors/decorators (ingress, routing engine stages, adapter invocation), not scattered as manual instrumentation calls through business logic — this keeps `router-core` readable and ensures instrumentation can't silently drift out of sync with the code it's observing.
+Every routing decision must be explainable after the fact without reproducing it — "which providers were considered, which was chosen, why, what it cost, and how long it took" is baseline information, not a debug-mode luxury. Observability is wired at module boundaries via interceptors/decorators (ingress, core routing subsystems, adapter invocation), not scattered as manual instrumentation calls through business logic — this keeps `router-core` readable and ensures instrumentation can't silently drift out of sync with the code it's observing.
 
 ## Traces (OpenTelemetry)
 
