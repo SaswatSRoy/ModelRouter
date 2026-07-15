@@ -17,8 +17,11 @@ subprojects {
     }
 
     dependencies {
+        "implementation"(platform("io.projectreactor:reactor-bom:2023.0.4"))
+        "implementation"("io.projectreactor:reactor-core")
         "testImplementation"(platform("org.junit:junit-bom:5.10.2"))
         "testImplementation"("org.junit.jupiter:junit-jupiter")
+        "testImplementation"("io.projectreactor:reactor-test")
     }
 
     tasks.withType<JavaCompile> {

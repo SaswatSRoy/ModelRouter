@@ -164,6 +164,7 @@ ModelRouter/
 ├── README.md               ← you are here
 ├── ARCHITECTURE.md          ← system design and module breakdown
 ├── ROADMAP.md               ← phased delivery plan
+├── DOMAIN_MODEL.md          ← canonical domain language and structural rules
 ├── GLOSSARY.md              ← locked terminology definitions
 ├── CONTRIBUTING.md          ← contribution guidelines
 ├── CODE_OF_CONDUCT.md       ← community standards
@@ -207,8 +208,8 @@ ModelRouter is currently in **design phase**. No implementation has begun. The p
 
 ## Future Roadmap (Summary)
 
-- **Phase 1** — Core routing (policy engine, execution planner, execution runtime), single-provider adapters (OpenAI, Anthropic), synchronous + streaming completions, static routing policies, basic observability.
-- **Phase 2** — Multi-provider fallback (`ExecutionPlan`), cost/latency-aware routing, Redis-backed caching, Kafka-based event pipeline, health checks, dashboard v1.
+- **Phase 1** — Core routing (policy engine, execution planner, execution runtime), provider adapters (OpenAI, Anthropic), synchronous + streaming completions, static routing policies, multi-provider fallback (`ExecutionPlan`), basic observability.
+- **Phase 2** — Cost/latency-aware routing, Redis-backed caching, Kafka-based event pipeline, health checks, dashboard v1.
 - **Phase 3** — Kubernetes-native operator, horizontal autoscaling, semantic caching, Langfuse integration, Android/Java SDKs GA.
 - **Stretch** — `AdaptiveRoutingEngine` (Future) based on `FeedbackEvent`s, `ContextOptimizer` (Future), pluggable `RequestAnalyzer` (Future), multi-region active-active deployment.
 

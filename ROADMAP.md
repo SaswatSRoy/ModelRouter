@@ -10,8 +10,8 @@ Status tracking for feature delivery. See [rfcs/RFC-001.md](rfcs/RFC-001.md) for
 - [x] Provider adapter contract and versioning rules documented
 - [x] Failure modes and degraded behavior documented
 - [x] Glossary and terminology locked
-- [ ] Design review sign-off from maintainers
-- [ ] `router-provider-spi` interface frozen for v1 (`InferenceProvider` contract)
+- [x] Design review sign-off from maintainers
+- [x] `router-provider-spi` interface frozen for v1 (`InferenceProvider` contract)
 
 ## Phase 1 — Core Routing (MVP)
 
