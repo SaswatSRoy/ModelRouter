@@ -73,13 +73,21 @@ Components:
 
 #### 3.2.3 Execution Runtime (`core.execution`)
 
-**Responsibility:** Takes the `ExecutionPlan` from the execution planner and executes it: invoke the top candidate via its adapter, manage retries and fallback, enforce circuit-breaker state, and normalize the response.
+**Responsibility:** Takes the `ExecutionPlan` from the execution planner and executes it. This is the **hot path** where the actual network I/O, retry logic, and circuit breaking occur.
+
+**The Routing Contract & Fallback Semantics:**
+The engine enforces a strict behavioral contract to ensure predictability and safety, especially during degraded provider states.
+
+1.  **Error Taxonomy (`ErrorCategory`):** The core engine never inspects raw HTTP exceptions (like `TimeoutException` or `IOException`). The SPI requires adapters to map all failures into a canonical `ErrorCategory`. The engine relies purely on `ErrorCategory.isRetryable()` to determine whether a failure (like a 503 or 429) should trigger a retry attempt, or if it's a fatal client error (400) that should immediately trigger a fallback to the next candidate.
+2.  **Pre-First-Byte Fallback Only:** Fallback and retry logic is strictly limited to the pre-first-byte phase. If the engine is streaming an SSE response and the connection drops *after* the first token has been emitted to the client, **the engine will mathematically refuse to fallback**. Doing so would stitch two different LLM responses together, resulting in a corrupted output for the user. Instead, the stream immediately aborts and propagates the error downstream.
+3.  **Circuit Breaker Integrity:** Circuit breakers track the health of a specific `(provider, model)` pair. Intermediate failures (e.g., a 503 that eventually succeeds on the 3rd retry) still increment the circuit breaker's failure count. This ensures that heavily degraded providers trip the breaker (State: OPEN) and are instantly skipped in future plans, rather than allowing them to silently drain the retry budget indefinitely.
+4.  **Exponential Backoff:** Configured via `RetryPolicy`, retries utilize a 0-indexed exponential backoff equation to prevent thundering herds on recovering provider endpoints.
 
 Components:
-- `ExecutionEngine` — the state machine that walks the `ExecutionPlan`. On a retryable failure (pre-first-byte), retries the current candidate with backoff up to the retry budget, then advances to the next candidate.
+- `ExecutionEngine` — the reactive state machine that walks the `ExecutionPlan`. Manages the retry loop, the `emitted` streaming guard flag, and the transition between candidates.
 - `CircuitBreakerRegistry` — per-(provider, model) circuit breakers. State: CLOSED → OPEN (on error-rate threshold) → HALF_OPEN (after cooldown) → CLOSED (on sustained success).
-- `ResponseNormalizer` — translates provider-specific response shapes into the canonical `InferenceResponse` / `InferenceChunk` stream.
-- `RetryPolicy` engine — configurable per `RoutingPolicy`: max attempts, backoff strategy, retryable failure classes.
+- `ResponseNormalizer` — translates provider-specific response shapes into the canonical `InferenceResponse` / `InferenceChunk` stream, stamping them with final `RoutingInfo` metadata (duration, attempt count).
+- `RetryPolicy` engine — configurable per `RoutingPolicy`: max attempts, initial backoff delay, multiplier, and max backoff limit.
 
 **Why a separate subsystem:** Execution is inherently stateful and side-effectful (network I/O, circuit-breaker mutations, retry state). Isolating it from planning means a bug in retry logic cannot corrupt candidate ranking, and a bug in scoring cannot cause an adapter to be invoked incorrectly. It also allows execution to be tested with fake adapters against known `ExecutionPlan`s, without requiring a real planner.
 
